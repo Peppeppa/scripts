@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# Parent-Verzeichnis, in dem die Vaults gespeichert werden sollen
+# pfad repoordner
 PARENT_DIR="$HOME/git"
 
-# Liste der Vaults mit ihren Git-Repository-URLs
+# liste vault + git urls
 declare -A VAULTS
-VAULTS["obsidian.dokumentation"]="git@github.com:Peppeppa/obsidian.dokumentation.git"
 VAULTS["obsidian.journal"]="git@github.com:Peppeppa/obsidian.journal.git"
 VAULTS["obsidian.notes"]="git@github.com:Peppeppa/obsidian.notes.git"
+VAULTS["obsidian.dokumentation"]="git@github.com:Peppeppa/obsidian.dokumentation.git"
 
-# Zeitstempel für die Commit-Message
+# commit message zeitstempel
 COMMIT_MESSAGE="Automatische Aktualisierung am $(date +'%Y-%m-%d %H:%M:%S')"
 
-# Funktion zum Initialisieren der Repositories
+# FUNKTION - initialisierung repos
 init_vaults() {
-    echo "Starte Initialisierung der Vaults..."
+    echo "Starte Initialisierung"
 
     # Überprüfe, ob das Parent-Verzeichnis existiert, wenn nicht, erstelle es
     if [ ! -d "$PARENT_DIR" ]; then
@@ -58,13 +58,40 @@ sync_vault() {
     fi
 }
 
+# Funktion: Cronjob einrichten
+
+setup_cronjob() {
+    CRON_CMD="*/30 * * * * $PWD/sync_all_obsidian.sh >> $HOME/obsidian_sync.log 2>&1"
+    
+    # Aktuelle Crontab auslesen, aber Fehler unterdrücken, falls noch keine existiert
+    CURRENT_CRON=$(crontab -l 2>/dev/null)
+
+    # Prüfen, ob bereits ein Cronjob mit 'sync_all_obsidian.sh' existiert
+    if echo "$CURRENT_CRON" | grep -q "sync_all_obsidian.sh"; then
+        echo "Ein bestehender Cronjob für sync_all_obsidian.sh wurde gefunden. Er wird überschrieben..."
+        # Alten Cronjob entfernen und neuen hinzufügen
+        (echo "$CURRENT_CRON" | grep -v "sync_all_obsidian.sh"; echo "$CRON_CMD") | crontab -
+    else
+        echo "Kein bestehender Cronjob gefunden. Ein neuer wird hinzugefügt..."
+        (echo "$CURRENT_CRON"; echo "$CRON_CMD") | crontab -
+    fi
+
+    echo "Cronjob wurde eingerichtet! Synchronisation erfolgt alle 30 Minuten."
+}
+
 # Hauptprogramm
-if [ "$1" == "-init" ]; then
-    init_vaults
-else
-    echo "Starte Synchronisation aller Vaults..."
-    for VAULT in "${!VAULTS[@]}"; do
-        sync_vault "$VAULT" "${VAULTS[$VAULT]}"
-    done
-    echo "Alle Vaults wurden erfolgreich synchronisiert!"
-fi
+case "$1" in
+    -init)
+        init_vaults
+        ;;
+    -cron)
+        setup_cronjob
+        ;;
+    *)
+        echo "Starte Synchronisation aller Vaults..."
+        for VAULT in "${!VAULTS[@]}"; do
+            sync_vault "$VAULT" "${VAULTS[$VAULT]}"
+        done
+        echo "Alle Vaults wurden erfolgreich synchronisiert!"
+        ;;
+esac
